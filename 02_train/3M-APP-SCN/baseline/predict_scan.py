@@ -23,15 +23,13 @@ input_size = input_shape * voxel_size
 output_size = output_shape * voxel_size
 
 
-def predict(iteration, raw_file, raw_dataset, out_file, out_datasets):
+def predict(iteration, raw_file, raw_dataset, out_file, out_dataset):
     raw = ArrayKey("RAW")
     affs = ArrayKey("AFFS")
-    lsds = ArrayKey("LSDS")
 
     scan_request = BatchRequest()
     scan_request.add(raw, input_size)
     scan_request.add(affs, output_size)
-    scan_request.add(lsds, output_size)
 
     context = (input_size - output_size) / 2
 
@@ -49,15 +47,14 @@ def predict(iteration, raw_file, raw_dataset, out_file, out_datasets):
 
     f = zarr.open(out_file, "w")
 
-    for ds_name, data in out_datasets.items():
-        ds = f.create_dataset(
-            ds_name,
-            shape=[data["out_dims"]] + list(total_output_roi.get_shape() / voxel_size),
-            dtype=data["out_dtype"],
-        )
+    ds = f.create_dataset(
+        out_dataset,
+        shape=[3] + list(total_output_roi.get_shape() / voxel_size),
+        dtype=np.uint8,
+    )
 
-        ds.attrs["resolution"] = voxel_size
-        ds.attrs["offset"] = total_output_roi.get_offset()
+    ds.attrs["resolution"] = voxel_size
+    ds.attrs["offset"] = total_output_roi.get_offset()
 
     pipeline = source
 
@@ -72,16 +69,14 @@ def predict(iteration, raw_file, raw_dataset, out_file, out_datasets):
         graph=os.path.join(setup_dir, "config.meta"),
         # max_shared_memory=(2*1024*1024*1024),
         inputs={net_config["raw"]: raw},
-        outputs={net_config["affs"]: affs, net_config["embedding"]: lsds},
+        outputs={net_config["affs"]: affs},
     )
 
     pipeline += IntensityScaleShift(affs, 255, 0)
-    pipeline += IntensityScaleShift(lsds, 255, 0)
 
     pipeline += ZarrWrite(
         dataset_names={
-            affs: "affs",
-            lsds: "lsds",
+            affs: out_dataset,
         },
         output_filename=out_file,
     )
@@ -92,7 +87,6 @@ def predict(iteration, raw_file, raw_dataset, out_file, out_datasets):
 
     predict_request.add(raw, total_input_roi.get_shape())
     predict_request.add(affs, total_output_roi.get_shape())
-    predict_request.add(lsds, total_output_roi.get_shape())
 
     print("Starting prediction...")
     with build(pipeline):
@@ -108,6 +102,6 @@ if __name__ == "__main__":
     raw_file = "../../../01_data/funke/zebrafinch/training/gt_z255-383_y1407-1663_x1535-1791.zarr"
     raw_dataset = "volumes/raw"
     out_file = "test_prediction.zarr"
-    out_datasets = net_config["outputs"]
+    out_dataset = "pred_affs"
 
-    predict(iteration, raw_file, raw_dataset, out_file, out_datasets)
+    predict(iteration, raw_file, raw_dataset, out_file, out_dataset)

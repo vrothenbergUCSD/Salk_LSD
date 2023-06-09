@@ -27,19 +27,15 @@ parser.add_argument(
     help="The bind port to use",
 )
 
+
+
 args = parser.parse_args()
 
 neuroglancer.set_server_bind_address(args.bind_address, args.bind_port)
 
 f = h5py.File(args.file[0])
 
-datasets = [
-    "volumes/raw",
-    "volumes/gt_affinities",
-    "volumes/pred_affinities",
-    "volumes/gt_embedding",
-    "volumes/pred_embedding",
-]
+datasets = ["volumes/raw", "volumes/gt_affinities", "volumes/pred_affinities"]
 
 
 viewer = neuroglancer.Viewer()
