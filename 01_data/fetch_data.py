@@ -46,7 +46,8 @@ if __name__ == "__main__":
     }
 
     jobs = [(bucket, f"funke/{d}/training/{x}") for d, v in volumes.items() for x in v]
-
+    access_key = None
+    secret_key = None
     # download each volume with separate process, would want to adapt to work
     # with more processes if downloading more than 3 volumes..
     pool = mp.Pool(len(jobs), initialize(access_key, secret_key))

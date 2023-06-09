@@ -21,12 +21,12 @@ if __name__ == "__main__":
 
     networks = [
         "baseline",
-        # 'mtlsd',
-        # 'lsd',
-        # 'long_range',
-        # 'malis',
-        # 'aclsd',
-        # 'acrlsd'
+        'mtlsd',
+        'lsd',
+        'long_range',
+        'malis',
+        'aclsd',
+        'acrlsd'
     ]
 
     for dataset in datasets:

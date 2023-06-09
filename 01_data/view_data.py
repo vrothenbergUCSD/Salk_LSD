@@ -19,13 +19,21 @@ parser.add_argument(
     "--bind-address",
     "-b",
     type=str,
-    default="localhost",
+    default="0.0.0.0",
     help="The bind address to use",
+)
+
+parser.add_argument(
+    "--bind-port",
+    "-p",
+    type=int,
+    default=8080,  # default to 0 (random port)
+    help="The bind port to use",
 )
 
 args = parser.parse_args()
 
-neuroglancer.set_server_bind_address(args.bind_address)
+neuroglancer.set_server_bind_address(args.bind_address, args.bind_port)
 
 f = zarr.open(args.data_dir[0])
 
@@ -59,4 +67,6 @@ with viewer.txn() as s:
 
         s.layers[ds] = layer_type(source=layer)
 
-print(viewer)
+url = viewer.get_viewer_url()
+new_url = url.replace('ip-172-31-1-72.us-west-2.compute.internal', 'ec2-34-212-229-170.us-west-2.compute.amazonaws.com')
+print(new_url)
