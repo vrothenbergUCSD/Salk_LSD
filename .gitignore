@@ -14,3 +14,4 @@ LSD/*
 03_salk/3M-APP-SCN
 02_train/3M-APP-SCN/baseline_bad
 *.bz2
+*.bak

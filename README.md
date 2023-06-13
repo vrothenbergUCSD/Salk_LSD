@@ -1,3 +1,9 @@
+# COGS 185 Advanced Machine Learning - Final Project 
+Local Shape Descriptors 
+Neuron segmentation task
+
+This is a forked repository of https://github.com/funkelab/lsd_nm_experiments
+
 # LSD NM experiments tutorial
 
 ## General notes
