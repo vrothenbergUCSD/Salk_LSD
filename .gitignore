@@ -15,3 +15,4 @@ LSD/*
 02_train/3M-APP-SCN/baseline_bad
 *.bz2
 *.bak
+*model_checkpoint_*
