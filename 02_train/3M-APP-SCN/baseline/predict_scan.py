@@ -18,9 +18,12 @@ input_shape = Coordinate(net_config["input_shape"])
 output_shape = Coordinate(net_config["output_shape"])
 
 # nm
-voxel_size = Coordinate((20, 9, 9))
+# voxel_size = Coordinate((20, 9, 9))
+voxel_size = Coordinate((50, 10, 10))
 input_size = input_shape * voxel_size
+print('input_size', input_size)
 output_size = output_shape * voxel_size
+print('output_size', output_size)
 
 
 def predict(iteration, raw_file, raw_dataset, out_file, out_dataset):
@@ -32,6 +35,7 @@ def predict(iteration, raw_file, raw_dataset, out_file, out_dataset):
     scan_request.add(affs, output_size)
 
     context = (input_size - output_size) / 2
+    print('context', context)
 
     source = ZarrSource(
         raw_file,
@@ -86,7 +90,9 @@ def predict(iteration, raw_file, raw_dataset, out_file, out_dataset):
     predict_request = BatchRequest()
 
     predict_request.add(raw, total_input_roi.get_shape())
+    print('total_input_roi', total_input_roi.get_shape())
     predict_request.add(affs, total_output_roi.get_shape())
+    print('total_output_roi', total_output_roi.get_shape())
 
     print("Starting prediction...")
     with build(pipeline):
@@ -98,10 +104,11 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     logging.getLogger("gunpowder.nodes.hdf5like_write_base").setLevel(logging.DEBUG)
 
-    iteration = 400000
-    raw_file = "../../../01_data/funke/zebrafinch/training/gt_z255-383_y1407-1663_x1535-1791.zarr"
+    iteration = 300000
+    raw_file = "/data/lsd_nm_experiments/03_salk/salk/3M-APP-SCN/training/data.zarr"
+    # raw_file = "../../../01_data/funke/zebrafinch/training/gt_z255-383_y1407-1663_x1535-1791.zarr"
     raw_dataset = "volumes/raw"
-    out_file = "test_prediction.zarr"
+    out_file = "prediction_300k-test.zarr"
     out_dataset = "pred_affs"
 
     predict(iteration, raw_file, raw_dataset, out_file, out_dataset)

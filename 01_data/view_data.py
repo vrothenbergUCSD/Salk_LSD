@@ -67,6 +67,11 @@ with viewer.txn() as s:
 
         s.layers[ds] = layer_type(source=layer)
 
-url = viewer.get_viewer_url()
-new_url = url.replace('ip-172-31-1-72.us-west-2.compute.internal', 'ec2-34-212-229-170.us-west-2.compute.amazonaws.com')
-print(new_url)
+viewer.get_viewer_url()
+
+print(viewer)
+# print(url)
+# new_url = url.replace('ip-172-31-1-72.us-west-2.compute.internal', 'ec2-18-237-169-11.us-west-2.compute.amazonaws.com')
+# print(new_url)
+
+#ec2-18-237-169-11.us-west-2.compute.amazonaws.com:8080/v/ad7426f863e0f56325edbbff82102de0623089ed/

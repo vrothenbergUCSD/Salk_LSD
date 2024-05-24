@@ -8,12 +8,12 @@ volumes = ["3M-APP-SCN",
         #    "zebrafinch"
         ]
 
-samples = [glob.glob(os.path.join(f"salk/{v}/training", "*.zarr")) for v in volumes]
+samples = [glob.glob(os.path.join(f"training", "*.zarr")) for v in volumes]
 
 samples = [i for s in samples for i in s]
 
-labels_name = "volumes/labels/neuron_ids"
-labels_mask_name = "volumes/labels/labels_mask"
+labels_name = "labels"
+labels_mask_name = "labels_mask"
 
 for sample in samples:
     f = zarr.open(sample, "a")

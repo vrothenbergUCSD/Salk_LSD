@@ -12,11 +12,40 @@ import tensorflow as tf
 
 logging.basicConfig(level=logging.INFO)
 
-data_dir = "/data/lsd_nm_experiments/03_salk/salk/3M-APP-SCN/training"
+# data_dir = "/data/lsd_nm_experiments/03_salk/salk/3M-APP-SCN/training"
+
+data_dir = "/data/lsd_nm_experiments/03_salk/training"
 
 samples = glob.glob(os.path.join(data_dir, "*.zarr"))
 
 neighborhood = [[-1, 0, 0], [0, -1, 0], [0, 0, -1]]
+
+
+# compute max padding if using elastic augmentation with 45 degree rotations
+def calc_max_padding(
+    output_size, voxel_size, neighborhood=None, sigma=None, mode="shrink"
+):
+    if neighborhood is not None:
+        if len(neighborhood) > 3:
+            neighborhood = neighborhood[9:12]
+
+        max_affinity = Coordinate(
+            [np.abs(aff) for val in neighborhood for aff in val if aff != 0]
+        )
+
+        method_padding = voxel_size * max_affinity
+
+    if sigma:
+        method_padding = Coordinate((sigma * 3,) * 3)
+
+    diag = np.sqrt(output_size[1] ** 2 + output_size[2] ** 2)
+
+    max_padding = Roi(
+        (Coordinate([i / 2 for i in [output_size[0], diag, diag]]) + method_padding),
+        (0,) * 3,
+    ).snap_to_grid(voxel_size, mode=mode)
+
+    return max_padding.get_begin()
 
 
 def train_until(max_iteration):
@@ -47,8 +76,11 @@ def train_until(max_iteration):
     output_size = Coordinate(config["output_shape"]) * voxel_size
 
     # max labels padding calculated
-    # labels_padding = Coordinate((500, 369, 369))
-    labels_padding = Coordinate((1000, 400, 400))
+    # labels_padding = Coordinate((500, 369, 369)) => 25,41,41 => 50,82,82
+    # labels_padding = Coordinate((1000, 400, 400))
+    labels_padding = (input_size - output_size) / 2
+    print('labels_padding', labels_padding)
+    # labels_padding = calc_max_padding(output_size, voxel_size, sigma=100)
 
     request = BatchRequest()
     request.add(raw, input_size)
@@ -64,9 +96,9 @@ def train_until(max_iteration):
         ZarrSource(
             sample,
             datasets={
-                raw: "volumes/raw",
-                labels: "volumes/labels/neuron_ids",
-                labels_mask: "volumes/labels/labels_mask",
+                raw: "raw",
+                labels: "labels",
+                labels_mask: "labels_mask",
             },
             array_specs={
                 raw: ArraySpec(interpolatable=True),
@@ -125,16 +157,16 @@ def train_until(max_iteration):
         + IntensityScaleShift(raw, 0.5, 0.5)
         + Snapshot(
             {
-                raw: "volumes/raw",
-                labels: "volumes/labels/neuron_ids",
-                gt: "volumes/gt_affinities",
-                affs: "volumes/pred_affinities",
-                gt_mask: "volumes/labels/gt_mask",
-                labels_mask: "volumes/labels/mask",
-                affs_gradient: "volumes/affs_gradient",
+                raw: "raw",
+                labels: "labels",
+                gt: "gt_affs",
+                affs: "pred_affs",
+                gt_mask: "gt_mask",
+                labels_mask: "labels_mask",
+                affs_gradient: "affs_gradient",
             },
-            dataset_dtypes={labels: np.uint64},
-            every=1000,
+            dataset_dtypes={labels: np.uint16},
+            every=5000,
             output_filename="batch_{iteration}.hdf",
             additional_request=snapshot_request,
         )

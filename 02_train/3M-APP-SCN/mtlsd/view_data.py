@@ -70,14 +70,14 @@ shader_1= """void main() {
 
    
 # Add 'pred_affs' to the datasets to visualize
-datasets = ["volumes/raw", 
+datasets = ["raw", 
             # "volumes/affs_gradient",
             # "volumes/gt_affinities",
-            "volumes/affs",
-            "volumes/lsds",
-            "volumes/labels/neuron_ids", 
+            "pred_affs",
+            "pred_lsds",
+            "labels", 
             # "volumes/labels/gt_mask",
-            "volumes/labels/labels_mask", 
+            # "volumes/labels/labels_mask", 
             ]
 
 viewer = neuroglancer.Viewer()
@@ -154,7 +154,7 @@ with viewer.txn() as s:
         else:
             s.layers[ds] = layer_type(source=layer)
 
-aws_address = 'ec2-18-236-204-101.us-west-2.compute.amazonaws.com'
+aws_address = 'ec2-34-221-242-119.us-west-2.compute.amazonaws.com'
 url = viewer.get_viewer_url()
 new_url = url.replace('ip-172-31-1-72.us-west-2.compute.internal', aws_address)
 print(new_url)

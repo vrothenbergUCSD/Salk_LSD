@@ -1,0 +1,212 @@
+from __future__ import print_function
+import sys
+from gunpowder import *
+from gunpowder.tensorflow import *
+from mala.gunpowder import AddLocalShapeDescriptor
+import os
+import glob
+import math
+import json
+import tensorflow as tf
+import numpy as np
+import logging
+import pdb
+
+logging.basicConfig(level=logging.INFO)
+
+
+# data_dir = "/data/lsd_nm_experiments/01_data/funke/zebrafinch/training"
+data_dir = "/data/lsd_nm_experiments/03_salk/salk/3M-APP-SCN/training"
+
+samples = glob.glob(os.path.join(data_dir, "*.zarr"))
+
+
+neighborhood = [[-1, 0, 0], [0, -1, 0], [0, 0, -1]]
+
+
+def train_until(max_iteration):
+    if tf.train.latest_checkpoint("."):
+        trained_until = int(tf.train.latest_checkpoint(".").split("_")[-1])
+    else:
+        trained_until = 0
+    if trained_until >= max_iteration:
+        return
+
+    with open("train_net.json", "r") as f:
+        config = json.load(f)
+
+    raw = ArrayKey("RAW")
+    labels = ArrayKey("GT_LABELS")
+    # print('labels', labels, type(labels), dir(labels))
+    labels_mask = ArrayKey("GT_LABELS_MASK")
+    embedding = ArrayKey("PREDICTED_EMBEDDING")
+    affs = ArrayKey("PREDICTED_AFFS")
+    gt_embedding = ArrayKey("GT_EMBEDDING")
+    gt_affs = ArrayKey("GT_AFFINITIES")
+    gt_affs_mask = ArrayKey("GT_AFFINITIES_MASK")
+    gt_affs_scale = ArrayKey("GT_AFFINITIES_SCALE")
+    affs_gradient = ArrayKey("AFFS_GRADIENT")
+
+    # voxel_size = Coordinate((20, 9, 9))
+    voxel_size = Coordinate((50, 10, 10)) # z, y, x
+    # input_shape = 84, 268, 268
+    input_size = Coordinate(config["input_shape"]) * voxel_size 
+    # output_shape = 48, 56, 56
+    output_size = Coordinate(config["output_shape"]) * voxel_size
+
+    # max labels padding calculated
+    # labels_padding = Coordinate((840, 720, 720))
+    sigma = 120
+    # sigma = 150
+    # the extra context needed for each method to look up one more voxel.
+    # For an lsds network it would be the size of the sigma * num_dims
+    method_padding = sigma * 3 
+    os_z = output_size[0]
+    print('os_z', os_z)
+    # Assumes square dimensions in x and y
+    os_xy = math.sqrt(2 * output_size[1] ** 2) # pythagorean to get diagonal
+    print('os_xy', os_xy)
+    max_padding = np.floor((np.array([os_z, os_xy, os_xy]) / 2.0) + method_padding)
+    print('max_padding', max_padding)
+    max_padding = (max_padding // voxel_size ) * voxel_size 
+    print('max_padding rounded:', max_padding)
+
+
+    labels_padding = Coordinate((max_padding[0], max_padding[1], max_padding[2]))
+    # labels_padding = Coordinate((1550, 750, 750))
+    # labels_padding = Coordinate((840, 720, 720))
+
+
+    print('='*50)
+    print('voxel_size', voxel_size)
+    print('input_size', input_size)
+    print('output_size',output_size)
+    print('labels_padding', labels_padding)
+    print('='*50)
+
+    request = BatchRequest()
+    request.add(raw, input_size)
+    request.add(labels, output_size)
+    request.add(labels_mask, output_size)
+    request.add(gt_embedding, output_size)
+    request.add(gt_affs, output_size)
+    request.add(gt_affs_mask, output_size)
+    request.add(gt_affs_scale, output_size)
+
+    # print('After requests')
+
+    snapshot_request = BatchRequest(
+        {
+            embedding: request[gt_embedding],
+            affs: request[gt_affs],
+            affs_gradient: request[gt_affs],
+        }
+    )
+    # print('snapshot_request', snapshot_request)
+
+    # print('Before data_sources')
+
+    data_sources = tuple(
+        ZarrSource(
+            sample,
+            datasets={
+                raw: "volumes/raw",
+                labels: "volumes/labels/neuron_ids",
+                labels_mask: "volumes/labels/labels_mask",
+            },
+            array_specs={
+                raw: ArraySpec(interpolatable=True),
+                labels: ArraySpec(interpolatable=False),
+                labels_mask: ArraySpec(interpolatable=False),
+            },
+        )
+        + Normalize(raw)
+        + Pad(raw, None)
+        + Pad(labels, labels_padding)
+        + Pad(labels_mask, labels_padding)
+        + RandomLocation(min_masked=0.5, mask=labels_mask)
+        for sample in samples
+    )
+
+    # print('-'*50)
+    # print('After data_sources')
+    # print(data_sources)
+    # print('-'*50)
+
+    # print('Before train_pipeline')
+
+    train_pipeline = (
+        data_sources
+        + RandomProvider()
+        + ElasticAugment(
+            control_point_spacing=[4, 4, 10],
+            jitter_sigma=[0, 2, 2],
+            rotation_interval=[0, math.pi / 2.0],
+            prob_slip=0.05,
+            prob_shift=0.05,
+            max_misalign=10,
+            subsample=8,
+        )
+        + SimpleAugment(transpose_only=[1, 2])
+        + IntensityAugment(raw, 0.9, 1.1, -0.1, 0.1, z_section_wise=True)
+        + GrowBoundary(labels, labels_mask, steps=1, only_xy=True)
+        + AddLocalShapeDescriptor(labels, gt_embedding, sigma=120, downsample=2)
+        + AddAffinities(
+            neighborhood,
+            labels=labels,
+            affinities=gt_affs,
+            labels_mask=labels_mask,
+            affinities_mask=gt_affs_mask,
+        )
+        + BalanceLabels(gt_affs, gt_affs_scale, gt_affs_mask)
+        + IntensityScaleShift(raw, 2, -1)
+        + PreCache(cache_size=40, num_workers=10)
+        + Train(
+            "train_net",
+            optimizer=config["optimizer"],
+            loss=config["loss"],
+            inputs={
+                config["raw"]: raw,
+                config["gt_embedding"]: gt_embedding,
+                config["loss_weights_embedding"]: labels_mask,
+                config["gt_affs"]: gt_affs,
+                config["loss_weights_affs"]: gt_affs_scale,
+            },
+            outputs={config["embedding"]: embedding, config["affs"]: affs},
+            gradients={config["affs"]: affs_gradient},
+            summary=config["summary"],
+            log_dir="log",
+            save_every=10000,
+        )
+        + IntensityScaleShift(raw, 0.5, 0.5)
+        + Snapshot(
+            {
+                raw: "volumes/raw",
+                labels: "volumes/labels/neuron_ids",
+                gt_embedding: "volumes/gt_embedding",
+                embedding: "volumes/pred_embedding",
+                gt_affs: "volumes/gt_affinities",
+                affs: "volumes/pred_affinities",
+                labels_mask: "volumes/labels/mask",
+                affs_gradient: "volumes/affs_gradient",
+            },
+            dataset_dtypes={labels: np.uint64},
+            every=1000,
+            output_filename="batch_{iteration}.hdf",
+            additional_request=snapshot_request,
+        )
+        + PrintProfilingStats(every=10)
+    )
+    # print(train_pipeline)
+
+    print("Starting training...")
+    with build(train_pipeline) as b:
+        for i in range(max_iteration - trained_until):
+            # pdb.set_trace()
+            b.request_batch(request)
+    print("Training finished")
+
+
+if __name__ == "__main__":
+    iteration = int(sys.argv[1])
+    train_until(iteration)

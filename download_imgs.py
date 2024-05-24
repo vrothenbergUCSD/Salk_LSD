@@ -10,7 +10,7 @@ if __name__ == "__main__":
 
     files = [
         "lsd:v0.8.img",
-        # "lsd_legacy.img",
+        "lsd_legacy.img",
     ]
 
     for f in files:

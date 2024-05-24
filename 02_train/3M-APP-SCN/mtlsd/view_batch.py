@@ -4,6 +4,7 @@ import numpy as np
 import os
 import sys
 import h5py
+import zarr
 
 parser = argparse.ArgumentParser()
 
@@ -31,14 +32,15 @@ args = parser.parse_args()
 
 neuroglancer.set_server_bind_address(args.bind_address, args.bind_port)
 
-f = h5py.File(args.file[0])
+# f = h5py.File(args.file[0])
+f = zarr.open(args.file[0])
 
 datasets = [
-    "volumes/raw",
-    "volumes/gt_affinities",
-    "volumes/pred_affinities",
-    "volumes/gt_embedding",
-    "volumes/pred_embedding",
+    "raw",
+    "gt_affs",
+    "pred_affs",
+    "gt_lsds",
+    "pred_lsds",
 ]
 
 
@@ -85,7 +87,7 @@ with viewer.txn() as s:
 
         s.layers[ds] = layer_type(source=layer, shader=shader)
 
-aws_external = 'ec2-18-236-204-101.us-west-2.compute.amazonaws.com'
+aws_external = 'ec2-34-221-242-119.us-west-2.compute.amazonaws.com'
 aws_internal = 'ip-172-31-1-72.us-west-2.compute.internal'
 url = viewer.get_viewer_url()
 new_url = url.replace(aws_internal, aws_external)
